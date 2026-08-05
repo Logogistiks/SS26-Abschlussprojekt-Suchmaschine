@@ -1,0 +1,7 @@
+beautifulsoup4
+colorama
+numpy
+requests
+scipy
+urllib3
+sqlite-web
