@@ -139,15 +139,15 @@ class Crawler:
 
 
     def __init__(
-            self,
-            start_url: str,
-            max_depth: int|None=None,
-            domain_restriction: str|None=None,
-            timeout: float=10.0,
-            logging: bool=False,
-            logging_output: TextIO|list[TextIO]=sys.stdout,
-            save_dir: str="site_storage"
-            ) -> None:
+        self,
+        start_url: str,
+        max_depth: int|None=None,
+        domain_restriction: str|None=None,
+        timeout: float=10.0,
+        logging: bool=False,
+        logging_output: TextIO|list[TextIO]=sys.stdout,
+        save_dir: str="site_storage"
+        ):
         """Initialize the crawler.
 
         Args:
@@ -177,17 +177,17 @@ class Crawler:
         path.mkdir(parents=True, exist_ok=True)
 
 
-    def _log(self, *values: object, sep: str|None=" ", end: str|None="\n", file=None, flush: bool=False) -> None: # rebuild instead of argument packing to preserve signature of built in print
-            """Can be used like built-in print, but respects logging settings."""
-            if self.logging and file is not None: # logging destination can be overridden on individual calls
-                print(*values, sep=sep, end=end, file=file, flush=flush)
-                return
-            if self.logging and isinstance(self.logging_output, list):
-                for output in self.logging_output:
-                    print(*values, sep=sep, end=end, file=output, flush=flush)
-                return
-            if self.logging:
-                print(*values, sep=sep, end=end, file=self.logging_output, flush=flush)
+    def _log(self, *values: object, sep: str|None=" ", end: str|None="\n", file=None, flush: bool=False): # rebuild instead of argument packing to preserve signature of built in print
+        """Can be used like built-in print, but respects logging settings."""
+        if self.logging and file is not None: # logging destination can be overridden on individual calls
+            print(*values, sep=sep, end=end, file=file, flush=flush)
+            return
+        if self.logging and isinstance(self.logging_output, list):
+            for output in self.logging_output:
+                print(*values, sep=sep, end=end, file=output, flush=flush)
+            return
+        if self.logging:
+            print(*values, sep=sep, end=end, file=self.logging_output, flush=flush)
 
 
     def _reset_crawl_stats(self) -> CrawlStats:
@@ -222,8 +222,8 @@ class Crawler:
         return Crawler._format_duration((elapsed / processed) * remaining)
 
 
-    def _report(self) -> None:
-        """Print a crawl summary and return the collected statistics."""
+    def _report(self):
+        """Print a crawl summary."""
         stats = self._crawl_stats
         if stats is None:
             return
@@ -568,6 +568,8 @@ class Crawler:
                     CREATE TABLE pages (
                         id INTEGER PRIMARY KEY,
                         url TEXT NOT NULL UNIQUE,
+                        title TEXT,
+                        content TEXT,
                         score REAL DEFAULT 0.0
                     );
                     CREATE TABLE links (
