@@ -1,7 +1,9 @@
 beautifulsoup4
 colorama
 numpy
+Pyside6
 requests
 scipy
 urllib3
+
 sqlite-web

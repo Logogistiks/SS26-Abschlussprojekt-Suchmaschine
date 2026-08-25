@@ -1,6 +1,7 @@
 import sqlite3
 import sys
 from pathlib import Path
+from typing import TextIO
 
 import numpy as np
 from bs4 import BeautifulSoup
@@ -18,7 +19,7 @@ class Preprocessor:
         db_path: str="metadata.db",
         save_dir: str="site_storage",
         logging: bool=False,
-        logging_output: str|list[str]=sys.stdout
+        logging_output: TextIO|list[TextIO]=sys.stdout
         ):
         """Initialize the Preprocessor.
         
@@ -97,6 +98,10 @@ class Preprocessor:
         if data: # update remaining data
             store()
 
+        if clear_directory:
+            try: Path(self.save_dir).rmdir()
+            except OSError: pass
+
         self._log("Title & content population completed")
 
         self.conn.executescript("""
@@ -104,7 +109,8 @@ class Preprocessor:
                 title,
                 content,
                 content='pages',
-                content_rowid='id'
+                content_rowid='id',
+                tokenize='trigram'
             );
             INSERT INTO pages_fts(pages_fts) VALUES('rebuild');
         """)

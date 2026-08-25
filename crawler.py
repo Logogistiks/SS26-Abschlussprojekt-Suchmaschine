@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 from colorama import Fore, Style
 
 __version__ = "1.1"
-__all__ = ["EXTENSIONS_TO_IGNORE", "BiMapStr2Int", "AdjacencyList", "Crawler"]
+__all__ = ["AdjacencyList", "BiMapStr2Int", "Crawler", "EXTENSIONS_TO_IGNORE"]
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
