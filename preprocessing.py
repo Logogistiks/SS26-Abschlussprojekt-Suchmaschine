@@ -104,18 +104,9 @@ class Preprocessor:
 
         self._log("Title & content population completed")
 
-        self.conn.executescript("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
-                title,
-                content,
-                content='pages',
-                content_rowid='id',
-                tokenize='trigram'
-            );
-            INSERT INTO pages_fts(pages_fts) VALUES('rebuild');
-        """)
+        self.conn.execute("INSERT INTO pages_fts(pages_fts) VALUES('rebuild');")
         self.conn.commit()
-        self._log("FTS table created and synced")
+        self._log("FTS table synced")
 
 
     def calculate_pagerank(self, tolerance: float=1e-6, max_iterations: int=100, m: int=0.15):
@@ -158,8 +149,12 @@ class Preprocessor:
         self._log("PageRank scores calculated and updated in db")
 
 
-if __name__ == "__main__":
+def main():
     with open("preprocessing.log", "w", encoding="utf-8") as f:
         with Preprocessor(logging=True, logging_output=[sys.stdout, f]) as preprocessor:
             preprocessor.prepare_fts()
             preprocessor.calculate_pagerank()
+
+
+if __name__ == "__main__":
+    main()

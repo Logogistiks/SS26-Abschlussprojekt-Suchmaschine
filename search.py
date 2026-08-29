@@ -151,7 +151,7 @@ class FTSCLI(FTSBase):
             print(errmsg)
 
 
-if __name__ == "__main__":
+def main():
     with open("search_cli.log", "w", encoding="utf-8") as f:
         fts = FTSCLI(logging=True, logging_output=f)
 
@@ -160,3 +160,7 @@ if __name__ == "__main__":
                 fts.handle_search()
         except KeyboardInterrupt:
             pass
+
+
+if __name__ == "__main__":
+    main()

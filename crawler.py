@@ -15,7 +15,7 @@ import urllib3
 from bs4 import BeautifulSoup
 from colorama import Fore, Style
 
-__version__ = "1.1"
+__version__ = "1.2"
 __all__ = ["AdjacencyList", "BiMapStr2Int", "Crawler", "EXTENSIONS_TO_IGNORE"]
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -85,6 +85,16 @@ class BiMapStr2Int:
             raise TypeError("Item must be either str or int")
 
 
+    def __len__(self) -> int: # fallback for __bool__
+        """Return the number of items in the mapping."""
+        return len(self._int_to_str)
+
+
+    def __iter__(self):
+        """Iterate over the strings in the mapping in order of their assigned ids."""
+        return iter(self._int_to_str)
+
+
     def __str__(self) -> str:
         """Return a readable representation of the mapping."""
         width = len(str(len(self._int_to_str) - 1))
@@ -97,6 +107,11 @@ class AdjacencyList:
     def __init__(self):
         """Initialize the adjacency container."""
         self._adj_list: dict[int, set[int]] = {}
+
+
+    def __getitem__(self, parent: int) -> set[int]:
+        """Return the set of child ids for a given parent id."""
+        return self._adj_list.get(parent, set())
 
 
     def update(self, parent: int, child: int):
@@ -236,18 +251,10 @@ class Crawler:
         self._log(f"  Runtime: {text_cyan(self._format_duration(duration))}")
         self._log(f"  Termination: {stats.termination_reason}") # termination text is expected to already be colored
         self._log(f"  Pages: known {text_cyan(stats.pages_known)}, processed {text_cyan(stats.pages_processed)}")
-        self._log(
-            f"  Fetches: ok {text_cyan(stats.pages_fetched)}, failed {text_cyan(stats.pages_failed_to_fetch)}, non-html {text_cyan(stats.pages_skipped_non_html)}, depth-limited {text_cyan(stats.pages_skipped_depth_limit)}"
-        )
-        self._log(
-            f"  Saves: ok {text_cyan(stats.pages_saved)}, skipped {text_cyan(stats.pages_skipped_save)}, failed {text_cyan(stats.pages_failed_to_save)}"
-        )
-        self._log(
-            f"  Links: examined {text_cyan(stats.links_examined)}, accepted {text_cyan(stats.links_valid)}, ignored {text_cyan(stats.links_ignored)}, enqueued pages {text_cyan(stats.pages_enqueued)}"
-        )
-        self._log(
-            f"  Crawl shape: max queue {text_cyan(stats.max_queue_size)}, max depth {text_cyan(stats.max_depth_seen)}, avg throughput {text_cyan(self._format_rate(stats.pages_processed, duration))}"
-        )
+        self._log(f"  Fetches: ok {text_cyan(stats.pages_fetched)}, failed {text_cyan(stats.pages_failed_to_fetch)}, non-html {text_cyan(stats.pages_skipped_non_html)}, depth-limited {text_cyan(stats.pages_skipped_depth_limit)}")
+        self._log(f"  Saves: ok {text_cyan(stats.pages_saved)}, skipped {text_cyan(stats.pages_skipped_save)}, failed {text_cyan(stats.pages_failed_to_save)}")
+        self._log(f"  Links: examined {text_cyan(stats.links_examined)}, accepted {text_cyan(stats.links_valid)}, ignored {text_cyan(stats.links_ignored)}, enqueued pages {text_cyan(stats.pages_enqueued)}")
+        self._log(f"  Crawl shape: max queue {text_cyan(stats.max_queue_size)}, max depth {text_cyan(stats.max_depth_seen)}, avg throughput {text_cyan(self._format_rate(stats.pages_processed, duration))}")
         self._log("="*60 + "\n")
 
 
@@ -282,9 +289,11 @@ class Crawler:
                     if self._crawl_stats is not None:
                         self._crawl_stats.pages_failed_to_fetch += 1
                     return None
+
                 normalized_url = self._normalize_and_validate_url(response.url, response.url)
                 if normalized_url in self.bimap: # avoid downloading the same page twice
                     return None, normalized_url
+
                 content_type = response.headers.get("Content-Type", "")
                 if not content_type.startswith("text/html"):
                     if self._crawl_stats is not None:
@@ -293,7 +302,7 @@ class Crawler:
 
                 if self._crawl_stats is not None:
                     self._crawl_stats.pages_fetched += 1
-                return response.text, normalized_url
+                return response.text, normalized_url # only now the full content is downloaded
         except Exception:
             if self._crawl_stats is not None:
                 self._crawl_stats.pages_failed_to_fetch += 1
@@ -302,7 +311,6 @@ class Crawler:
 
     def _save_content(self, page_id: int, file_content: str|None) -> bool:
         """Save page content to disk for a given page id."""
-
         if file_content is None:
             if self._crawl_stats is not None:
                 self._crawl_stats.pages_skipped_save += 1
@@ -438,7 +446,7 @@ class Crawler:
                         queue.append((link_id, current_depth + 1))
                         newly_enqueued += 1
 
-                stats.pages_known = len(self.bimap._int_to_str)
+                stats.pages_known = len(self.bimap)
                 stats.pages_enqueued += newly_enqueued
                 stats.max_queue_size = max(stats.max_queue_size, len(queue))
 
@@ -480,40 +488,39 @@ class Crawler:
 
     def cleanup(self):
         """Ignore pages with no outgoing links and reindex remaining pages."""
-        if not self.bimap._int_to_str:
+        if not self.bimap:
             return
 
-        all_nodes = set(range(len(self.bimap._int_to_str)))
-        out_degree = {node_id: 0 for node_id in all_nodes}
-        parents_of: dict[int, set[int]] = {node_id: set() for node_id in all_nodes}
+        out_degree = {node_id: 0 for node_id in range(len(self.bimap))}
+        parents_of = AdjacencyList() # build reverse mapping
 
         for parent, children in self.adj_list._adj_list.items():
-            #* V this pre-filtering is needed because nodes that only have a self-link would not be removed in the following iteration,
-            #* V but after later filterign would become leaf nodes which cant exist in the final graph.
-            children = [child for child in children if child != parent]
-            out_degree[parent] = len(children)
             for child in children:
-                parents_of[child].add(parent)
+                #* V this pre-filtering is needed because nodes that only have a self-link would not be removed in the following iteration,
+                #* V but after later filtering would become leaf nodes which cant exist in the final graph.
+                if child != parent:
+                    out_degree[parent] += 1
+                    parents_of.update(child, parent)
 
         # iteratively find all leaf nodes
         queue = deque(node_id for node_id, degree in out_degree.items() if degree == 0)
-        removed: set[int] = set()
+        to_remove: set[int] = set()
 
         while queue:
             node_id = queue.popleft()
-            if node_id in removed:
+            if node_id in to_remove:
                 continue
-            removed.add(node_id)
 
+            to_remove.add(node_id)
             for parent in parents_of[node_id]:
-                if parent in removed:
+                if parent in to_remove:
                     continue
                 out_degree[parent] -= 1
                 if out_degree[parent] == 0:
                     queue.append(parent)
 
         # rebuild graph without leaf nodes by reindexing and remapping ids
-        kept_nodes = [node_id for node_id in range(len(self.bimap._int_to_str)) if node_id not in removed]
+        kept_nodes = [node_id for node_id in range(len(self.bimap)) if node_id not in to_remove]
         if not kept_nodes:
             self.bimap = BiMapStr2Int()
             self.adj_list = AdjacencyList()
@@ -525,25 +532,21 @@ class Crawler:
 
         # fill new bimap and adj_list
         for old_id in kept_nodes:
-            new_id = new_bimap.add(self.bimap._int_to_str[old_id])
+            new_id = new_bimap.add(self.bimap[old_id])
 
             # rename file corresponding to id
             source_path = Path(self.save_dir, f"{old_id}_")
             if source_path.exists():
                 source_path.replace(Path(self.save_dir, str(new_id)))
 
-            children = self.adj_list._adj_list.get(old_id)
-            if not children:
-                continue
-
-            # this second filtering is needed to actually ignore self-links.
-            # nodes with only a self-link would become leaf nodes after this, but were already ignored by the pre-filtering
-            mapped_children = {id_map[child] for child in children if child in id_map and child != old_id}
-            if mapped_children:
-                new_adj_list._adj_list[new_id] = mapped_children
+            for child in self.adj_list[old_id]:
+                #* V this second filtering is needed to actually ignore self-links.
+                #* V nodes with only a self-link would become leaf nodes after this, but were already ignored by the pre-filtering
+                if child in id_map and child != old_id:
+                    new_adj_list.update(new_id, id_map[child])
 
         # remove orphaned files
-        for old_id in removed:
+        for old_id in to_remove:
             orphan_path = Path(self.save_dir, f"{old_id}_")
             if orphan_path.exists():
                 orphan_path.unlink(missing_ok=True)
@@ -564,6 +567,7 @@ class Crawler:
                 # setup tables in clean slate
                 cur.executescript("""
                     DROP TABLE IF EXISTS links;
+                    DROP TABLE IF EXISTS pages_fts;
                     DROP TABLE IF EXISTS pages;
                     CREATE TABLE pages (
                         id INTEGER PRIMARY KEY,
@@ -578,10 +582,17 @@ class Crawler:
                         FOREIGN KEY (source_id) REFERENCES pages(id),
                         FOREIGN KEY (target_id) REFERENCES pages(id)
                     );
+                    CREATE VIRTUAL TABLE pages_fts USING fts5(
+                        title,
+                        content,
+                        content='pages',
+                        content_rowid='id',
+                        tokenize='trigram'
+                    );
                 """)
 
                 # write pages
-                cur.executemany("INSERT INTO pages (id, url) VALUES (?, ?)", enumerate(self.bimap._int_to_str))
+                cur.executemany("INSERT INTO pages (id, url) VALUES (?, ?)", enumerate(self.bimap))
 
                 # write links
                 link_rows = [
@@ -594,7 +605,7 @@ class Crawler:
             self._log(f"Error exporting to SQLite: {text_red(repr(e))}")
 
 
-if __name__ == "__main__":
+def main():
     url = "https://www.math.kit.edu/"
     domain = "math.kit.edu"
     limit = None
@@ -605,3 +616,7 @@ if __name__ == "__main__":
         if success:
             crawler.cleanup()
         crawler.export_to_sqlite()
+
+
+if __name__ == "__main__":
+    main()

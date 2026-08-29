@@ -6,7 +6,7 @@ from PySide6.QtWidgets import *
 
 from search import FTSBase, SearchResultItem
 
-__version__ = "1.0"
+__version__ = "1.1"
 __all__ = ["FTSGUIWindow", "SearchResultWidget", "Worker", "WorkerSignals"]
 
 
@@ -88,6 +88,9 @@ class FTSGUIWindow(QWidget):
     def __init__(self, fts: FTSBase):
         super().__init__()
         self.fts = fts
+        self.search_results = []
+        self.search_results_index = 0
+        self.is_loading_results = False
 
         self.setWindowTitle("Search Engine GUI")
         self.resize(800, 600)
@@ -124,6 +127,7 @@ class FTSGUIWindow(QWidget):
         # Scroll Area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.verticalScrollBar().valueChanged.connect(self._on_scroll)
 
         self.results_container = QWidget()
         self.results_layout = QVBoxLayout(self.results_container)
@@ -139,14 +143,44 @@ class FTSGUIWindow(QWidget):
         main_layout.addWidget(self.status_bar)
 
 
+    def _on_scroll(self, value: int):
+        """Load more results when user scrolls near bottom of scroll area."""
+        scrollbar = self.scroll_area.verticalScrollBar()
+        if value >= scrollbar.maximum() - scrollbar.pageStep(): # load when one page left to scroll
+            self._append_next_results()
+
+
     def _clear_results(self):
-        """Clear all displayed search results from the GUI."""
+        """Clear all stored and displayed search results."""
+        self.search_results = []
+        self.search_results_index = 0
         while self.results_layout.count():
             child = self.results_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
         self.status_bar.clearMessage()
+
+
+    def _append_next_results(self, batch_size: int=30):
+        """Append the next batch of search results to the GUI."""
+        if self.is_loading_results:
+            return
+
+        if self.search_results_index >= len(self.search_results):
+            return
+
+        self.is_loading_results = True
+        self.scroll_area.setUpdatesEnabled(False) # prevent flickering
+        try:
+            end_index = min(self.search_results_index + batch_size, len(self.search_results))
+            for item in self.search_results[self.search_results_index:end_index]:
+                self.results_layout.addWidget(SearchResultWidget(item))
+
+            self.search_results_index = end_index
+        finally:
+            self.is_loading_results = False
+            self.scroll_area.setUpdatesEnabled(True)
 
 
     def _handle_search(self):
@@ -166,9 +200,9 @@ class FTSGUIWindow(QWidget):
 
     def _handle_search_success(self, results: list[SearchResultItem]):
         """Update the GUI according to the search results."""
+        self.search_results = results
         if results:
-            for item in results:
-                self.results_layout.addWidget(SearchResultWidget(item))
+            self._append_next_results()
         else:
             self.results_layout.addWidget(QLabel("--- No results found ---", alignment=Qt.AlignmentFlag.AlignCenter))
 
@@ -182,7 +216,7 @@ class FTSGUIWindow(QWidget):
         self.status_bar.showMessage(errmsg)
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication()
     app.setStyle("Fusion")
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
@@ -192,4 +226,8 @@ if __name__ == "__main__":
         window = FTSGUIWindow(fts)
         window.showMaximized()
 
-        sys.exit(app.exec())
+        app.exec()
+
+
+if __name__ == "__main__":
+    main()
