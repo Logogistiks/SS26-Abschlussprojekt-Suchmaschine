@@ -109,7 +109,7 @@ class Preprocessor:
         self._log("FTS table synced")
 
 
-    def calculate_pagerank(self, tolerance: float=1e-6, max_iterations: int=100, m: int=0.15):
+    def calculate_pagerank(self, tolerance: float=1e-6, max_iterations: int=100, m: float=0.15):
         """Calculate PageRank scores and update db."""
         if not self.conn:
             self._log("Database connection is not established. Use Preprocessor in a context manager.")
