@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from collections import deque
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from time import perf_counter
 from typing import TextIO, overload
@@ -247,7 +247,7 @@ class Crawler:
         duration = finished_at - stats.started_at
 
         self._log("\n" + "="*60)
-        self._log("Crawl report")
+        self._log(f"Crawl report [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
         self._log(f"  Runtime: {text_cyan(self._format_duration(duration))}")
         self._log(f"  Termination: {stats.termination_reason}") # termination text is expected to already be colored
         self._log(f"  Pages: known {text_cyan(stats.pages_known)}, processed {text_cyan(stats.pages_processed)}")
